@@ -1,11 +1,27 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 
+const EMPTY_OPPORTUNITY = {
+  title: "",
+  category: "scholarship",
+  description: "",
+  organization: "",
+  country: "",
+  fieldOfStudy: "",
+  tags: "",
+  deadline: "",
+  url: "",
+};
+
 export default function Admin() {
   const [tab, setTab] = useState("reports");
   const [reports, setReports] = useState(null);
   const [users, setUsers] = useState([]);
   const [pending, setPending] = useState([]);
+  const [newOpportunity, setNewOpportunity] = useState(EMPTY_OPPORTUNITY);
+  const [oppError, setOppError] = useState("");
+  const [oppSaved, setOppSaved] = useState(false);
+  const [oppBusy, setOppBusy] = useState(false);
 
   async function loadAll() {
     const [r, u, p] = await Promise.all([api.adminReports(), api.adminListUsers(), api.adminPendingOpportunities()]);
@@ -33,6 +49,30 @@ export default function Admin() {
     loadAll();
   };
 
+  const handleCreateOpportunity = async (e) => {
+    e.preventDefault();
+    setOppError("");
+    setOppSaved(false);
+    setOppBusy(true);
+    try {
+      await api.createOpportunity({
+        ...newOpportunity,
+        tags: newOpportunity.tags
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean),
+        deadline: newOpportunity.deadline || null,
+      });
+      setNewOpportunity(EMPTY_OPPORTUNITY);
+      setOppSaved(true);
+      loadAll();
+    } catch (err) {
+      setOppError(err.message);
+    } finally {
+      setOppBusy(false);
+    }
+  };
+
   return (
     <div className="page">
       <h1>Administration</h1>
@@ -47,6 +87,9 @@ export default function Admin() {
         </button>
         <button className={tab === "opportunities" ? "tab active" : "tab"} onClick={() => setTab("opportunities")}>
           Pending Opportunities ({pending.length})
+        </button>
+        <button className={tab === "add" ? "tab active" : "tab"} onClick={() => setTab("add")}>
+          Add Opportunity
         </button>
       </div>
 
@@ -138,6 +181,91 @@ export default function Admin() {
             ))
           )}
         </div>
+      )}
+
+      {tab === "add" && (
+        <form className="card form-grid" onSubmit={handleCreateOpportunity} style={{ marginTop: "1rem" }}>
+          {oppError && <div className="alert-error span-2">{oppError}</div>}
+          {oppSaved && <div className="alert-success span-2">Opportunity published.</div>}
+          <label className="span-2">
+            Title
+            <input
+              required
+              value={newOpportunity.title}
+              onChange={(e) => setNewOpportunity({ ...newOpportunity, title: e.target.value })}
+            />
+          </label>
+          <label>
+            Category
+            <select
+              value={newOpportunity.category}
+              onChange={(e) => setNewOpportunity({ ...newOpportunity, category: e.target.value })}
+            >
+              <option value="scholarship">Scholarship</option>
+              <option value="internship">Internship</option>
+              <option value="event">Event</option>
+              <option value="course">Course</option>
+            </select>
+          </label>
+          <label>
+            Deadline
+            <input
+              type="date"
+              value={newOpportunity.deadline}
+              onChange={(e) => setNewOpportunity({ ...newOpportunity, deadline: e.target.value })}
+            />
+          </label>
+          <label>
+            Organization
+            <input
+              value={newOpportunity.organization}
+              onChange={(e) => setNewOpportunity({ ...newOpportunity, organization: e.target.value })}
+            />
+          </label>
+          <label>
+            Country
+            <input
+              value={newOpportunity.country}
+              onChange={(e) => setNewOpportunity({ ...newOpportunity, country: e.target.value })}
+              placeholder="e.g. Ghana, Global"
+            />
+          </label>
+          <label className="span-2">
+            Field of study
+            <input
+              value={newOpportunity.fieldOfStudy}
+              onChange={(e) => setNewOpportunity({ ...newOpportunity, fieldOfStudy: e.target.value })}
+              placeholder="e.g. software engineering"
+            />
+          </label>
+          <label className="span-2">
+            Tags (comma-separated)
+            <input
+              value={newOpportunity.tags}
+              onChange={(e) => setNewOpportunity({ ...newOpportunity, tags: e.target.value })}
+              placeholder="javascript, web development"
+            />
+          </label>
+          <label className="span-2">
+            Description
+            <textarea
+              rows={3}
+              value={newOpportunity.description}
+              onChange={(e) => setNewOpportunity({ ...newOpportunity, description: e.target.value })}
+            />
+          </label>
+          <label className="span-2">
+            External URL
+            <input
+              value={newOpportunity.url}
+              onChange={(e) => setNewOpportunity({ ...newOpportunity, url: e.target.value })}
+              placeholder="https://..."
+            />
+          </label>
+          <button className="btn-primary span-2" type="submit" disabled={oppBusy}>
+            {oppBusy ? "Publishing..." : "Publish opportunity"}
+          </button>
+        </form>
       )}
     </div>
   );
