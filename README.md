@@ -7,6 +7,16 @@ This repository contains two apps:
 - **`backend/`** — a Node.js + Express + PostgreSQL REST API implementing the SRS's functional requirements (FR1–FR9).
 - **`frontend/`** — a React (Vite) single-page app implementing the SRS's user interfaces (Section 3.1).
 
+## Live deployment
+
+| | URL |
+|---|---|
+| **App (frontend)** | https://stem-access-sigma.vercel.app |
+| **API (backend)** | https://stem-access.onrender.com/api |
+| **Source** | https://github.com/Nadia-Odame/STEM-ACCESS |
+
+Log in with any of the [demo accounts](#demo-accounts-after-npm-run-seed) below. The backend is on Render's free tier, so the **first request after a period of inactivity can take 20–30 seconds** while the instance spins back up — this is expected, not a bug.
+
 ## What's implemented, mapped to the SRS
 
 | SRS requirement | Where it lives |
@@ -88,15 +98,17 @@ Open `http://localhost:5173`, log in with one of the seeded demo accounts, and e
 
 Any of these give you a `DATABASE_URL` connection string in a couple of minutes, no credit card required:
 
-- **[Neon](https://neon.tech)** — create a project, copy the connection string it gives you. Set `DATABASE_SSL=true` in `backend/.env`.
+- **[Neon](https://neon.tech)** — create a project, copy the connection string it gives you. Set `DATABASE_SSL=true` in `backend/.env`. Neon's connection strings include `?sslmode=require&channel_binding=require` in the query string already — leave that as-is, it works with the `dialectOptions.ssl` config in `backend/src/config/db.js` as long as `DATABASE_SSL=true` is also set.
 - **[Supabase](https://supabase.com)** — create a project, go to Project Settings → Database, copy the connection string. Set `DATABASE_SSL=true`.
 - **Render's managed Postgres** — if you're already deploying the backend on Render (below), you can create the database there too and skip a separate provider.
 
 ## Deploying so you have a public URL
 
-The assignment needs a *publicly accessible deployed URL*. The simplest free-tier combination is: **Neon or Supabase** for the database, **Render** for the backend API, **Vercel** for the frontend.
+The assignment needs a *publicly accessible deployed URL*. This prototype is deployed exactly as planned: **Neon** for the database, **Render** for the backend API, **Vercel** for the frontend. Below is what actually happened, including a couple of details that differed from the original plan.
 
 ### Step 1 — Push this repo to your own GitHub
+
+Already done — this repo is at https://github.com/Nadia-Odame/STEM-ACCESS with full history. If you're setting this up fresh elsewhere:
 
 ```bash
 cd stem-access
@@ -109,23 +121,28 @@ git push -u origin main
 
 ### Step 2 — Deploy the backend (Render)
 
-1. Go to [render.com](https://render.com) → New → Web Service → connect your GitHub repo.
-2. Root directory: `backend`. Build command: `npm install`. Start command: `npm start`.
-3. Add environment variables from `backend/.env.example` (`DATABASE_URL`, `DATABASE_SSL=true`, `JWT_SECRET`, `JWT_EXPIRES_IN`, `CORS_ORIGIN` — set this to your Vercel URL once you have it in Step 3). Leave `OPENAI_API_KEY` blank unless you have one.
-4. Deploy. Once it's live, open a terminal locally (or Render's Shell tab) and run `npm run seed` once against that same `DATABASE_URL` to load demo data — or run it from your own machine with `DATABASE_URL` pointed at the hosted database.
-5. Copy the Render URL (e.g. `https://stem-access-api.onrender.com`) — you'll need it in Step 3.
+Deployed via the Render dashboard (New → Web Service → connect the GitHub repo):
+
+1. Root directory: `backend`. Build command: `npm install`. Start command: `npm start`.
+2. Environment variables set on the Render service: `DATABASE_URL` (the Neon connection string, including its `sslmode=require&channel_binding=require` query params), `DATABASE_SSL=true`, `JWT_SECRET`, `JWT_EXPIRES_IN=7d`, `CORS_ORIGIN` (updated in Step 3 below once the Vercel URL existed). `OPENAI_API_KEY` left blank — the recommendation engine works fully without it. `PORT` was left unset; Render injects its own `PORT` and the app already reads `process.env.PORT`.
+3. `npm run seed` was run **once, locally**, with `backend/.env`'s `DATABASE_URL` pointed at the same Neon database Render uses — there's no need to re-seed on Render itself since both point at the same database.
+4. Live at: **https://stem-access.onrender.com** (health check: `/api/health`).
+5. Free-tier note: the instance spins down when idle, so the first request after a while takes 20–30 seconds. Subsequent requests are fast.
 
 ### Step 3 — Deploy the frontend (Vercel)
 
-1. Go to [vercel.com](https://vercel.com) → New Project → import the same GitHub repo.
-2. Root directory: `frontend`. Framework preset: Vite (build command `npm run build`, output directory `dist`).
-3. Add environment variable `VITE_API_URL` = `https://<your-render-url>/api`.
-4. Deploy. Vercel gives you a public URL like `https://stem-access.vercel.app` — **this is the URL to put in your Google Doc.**
-5. Go back to Render and update `CORS_ORIGIN` to this Vercel URL, then redeploy the backend so the browser is allowed to call it.
+Deployed via the Vercel CLI (`npx vercel`) from inside `frontend/`, authenticated with `vercel login --non-interactive` (device-code flow):
+
+1. `vercel link` to create/connect the `stem-access` project.
+2. **Root Directory gotcha:** don't set a "Root Directory" project setting to `frontend` if you're deploying with the CLI *from inside* `frontend/` — the CLI already uploads only that folder's contents as the deployment source, so a `Root Directory` setting on top of that causes `deploy_failed: The specified Root Directory "frontend" does not exist`. Leave Root Directory unset (auto-detect) for CLI deploys run from within `frontend/`. (If you instead deploy via GitHub-integration builds triggered from the repo root, *do* set Root Directory to `frontend` — that's the case the original plan assumed.)
+3. `vercel env add VITE_API_URL production` set to `https://stem-access.onrender.com/api`. This has to be set **before** building — Vite bakes `VITE_API_URL` into the static bundle at build time, so changing it later requires a rebuild/redeploy, not just an env var update.
+4. `vercel --prod` to build and deploy.
+5. Live at: **https://stem-access-sigma.vercel.app**
+6. Went back to Render and set `CORS_ORIGIN=http://localhost:5173,https://stem-access-sigma.vercel.app`, then let Render redeploy so the browser is allowed to call the API from the deployed frontend's origin.
 
 ### Step 4 — Verify
 
-Open your Vercel URL, register a new account (or use a seeded demo account), and confirm you can browse opportunities, see recommendations, and (as the seeded admin) approve a pending opportunity. This confirms the "Solution Deployment" and "Operation" rubric items.
+Confirmed on the live URL: registered a new account, logged in with each seeded demo account, browsed/searched/filtered opportunities, saved and applied to one, saw AI recommendations and skill-gap/roadmap on the dashboard, sent a mentorship request → accepted it → exchanged messages, and (as the seeded admin) approved a pending opportunity and reviewed the Reports tab. This confirms the "Solution Deployment" and "Operation" rubric items end-to-end.
 
 ## Demo accounts (after `npm run seed`)
 
